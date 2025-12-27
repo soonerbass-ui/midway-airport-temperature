@@ -49,7 +49,6 @@ app.get('/api/temps', async (req, res) => {
         tempC = parseInt(tempMatch[1].replace('M', '-'), 10);
       }
 
-      // Store all reports per station (sorted by time later)
       if (!resultsMap[code]) resultsMap[code] = { reports: [] };
       resultsMap[code].reports.push({ tempC, raw: line.trim() });
     });
@@ -67,29 +66,30 @@ app.get('/api/temps', async (req, res) => {
         };
       }
 
-      // Sort reports by time (most recent first)
+      // Sort reports by timestamp (most recent first)
       station.reports.sort((a, b) => {
         const timeA = a.raw.match(/\d{6}Z/);
         const timeB = b.raw.match(/\d{6}Z/);
-        return (timeB ? timeB[0] : '000000Z') > (timeA ? timeA[0] : '000000Z') ? -1 : 1;
+        if (!timeA || !timeB) return 0;
+        return timeB[0].localeCompare(timeA[0]); // String compare works for YYMMDDHHMM format
       });
 
-      const current = station.reports[0].tempC;
-      const previous = station.reports.length > 1 ? station.reports[1].tempC : null;
+      const latest = station.reports[0];
+      const previous = station.reports.length > 1 ? station.reports[1] : null;
 
       let trend = '—';
-      if (previous !== null) {
-        if (current > previous) trend = '🔴';
-        else if (current < previous) trend = '🔵';
+      if (previous && latest.tempC !== null && previous.tempC !== null) {
+        if (latest.tempC > previous.tempC) trend = '🔴';
+        else if (latest.tempC < previous.tempC) trend = '🔵';
       }
 
       return {
         code: apt.code,
         name: apt.name,
-        tempC: current,
-        tempF: current !== null ? Math.round((current * 9/5) + 32) : null,
+        tempC: latest.tempC,
+        tempF: latest.tempC !== null ? Math.round((latest.tempC * 9/5) + 32) : null,
         trend,
-        rawMetar: station.reports[0].raw
+        rawMetar: latest.raw
       };
     });
 
@@ -99,7 +99,7 @@ app.get('/api/temps', async (req, res) => {
     });
   } catch (error) {
     console.error('Error:', error);
-    res.status(500).json({ error: 'Failed to fetch or parse METAR data' });
+    res.status(500).json({ error: 'Failed to fetch METAR data' });
   }
 });
 
