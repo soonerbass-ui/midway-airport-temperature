@@ -45,11 +45,12 @@ app.get('/api/temps', async (req, res) => {
       const code = codeMatch[1];
       if (!codeToAirport[code]) return;
 
-      // Extract temperature: looks for (M?\d{2})/(M?\d{2}) with optional spaces
-      const tempMatch = line.match(/(\s|^)(M?\d{2})\/(M?\d{2})(\s|$)/);
+      // Extract temperature: matches (M?\d{2})/(M?\d{2}) with optional spaces around
+      // This handles formats like 12/08, 09/M05, M02/M06
+      const tempMatch = line.match(/(M?\d{2})\/(M?\d{2})/);
       let tempC = null;
       if (tempMatch) {
-        const tempStr = tempMatch[2];
+        const tempStr = tempMatch[1]; // First number is air temp
         tempC = parseInt(tempStr.replace('M', '-'), 10);
       }
 
@@ -62,7 +63,7 @@ app.get('/api/temps', async (req, res) => {
       };
     });
 
-    // Build ordered results (preserves your list order)
+    // Build ordered results
     const orderedResults = airportList.map(apt => {
       return resultsMap[apt.code] || {
         code: apt.code,
