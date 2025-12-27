@@ -7,7 +7,6 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.static('public'));
 
-// Ordered list of airports
 const airportList = [
   { code: 'KLAX', name: 'Los Angeles (LAX)' },
   { code: 'KORD', name: 'Chicago (ORD)' },
@@ -26,60 +25,25 @@ app.get('/api/temps', async (req, res) => {
     const ids = airportList.map(a => a.code).join(',');
     const apiUrl = `https://aviationweather.gov/api/data/metar?ids=${ids}&format=raw`;
     
-    const response = await fetch(apiUrl);
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    
+    const response = await fetch(apiUrl, {
+      headers: { 'User-Agent': 'Midway-Temp-App/1.0' } // Helps avoid blocks
+    });
+
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}`);
+    }
+
     const text = await response.text();
-    const lines = text.trim().split('\n').filter(line => line.trim());
     
-    const codeToAirport = {};
-    airportList.forEach(apt => codeToAirport[apt.code] = apt);
-
-    const resultsMap = {};
-
-    lines.forEach(line => {
-      // Match ICAO code at the very start of the line
-      const codeMatch = line.match(/^([A-Z]{4})\s/);
-      if (!codeMatch) return;
-
-      const code = codeMatch[1];
-      if (!codeToAirport[code]) return;
-
-      // Extract air temperature: matches dd/dd or Mdd/dd or Mdd/Mdd (first number before /)
-      const tempMatch = line.match(/(M?\d{2})\/(M?\d{2})/);
-      let tempC = null;
-      if (tempMatch) {
-        const tempStr = tempMatch[1]; // First group is air temp
-        tempC = parseInt(tempStr.replace('M', '-'), 10);
-      }
-
-      resultsMap[code] = {
-        code,
-        name: codeToAirport[code].name,
-        tempC,
-        tempF: tempC !== null ? Math.round((tempC * 9/5) + 32) : null,
-        rawMetar: line.trim()
-      };
-    });
-
-    // Build ordered results (preserves your requested order)
-    const orderedResults = airportList.map(apt => {
-      return resultsMap[apt.code] || {
-        code: apt.code,
-        name: apt.name,
-        tempC: null,
-        tempF: null,
-        rawMetar: 'No METAR available'
-      };
-    });
-
+    // Debug: return the raw API response in JSON for testing
     res.json({ 
-      airports: orderedResults,
+      debug_raw_text: text, 
+      line_count: text.split('\n').length,
+      airports: [], // empty for now
       updated: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ error: 'Failed to fetch or parse METAR data' });
+    res.status(500).json({ error: error.message });
   }
 });
 
