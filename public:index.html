@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Midway Airport Temperature</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      text-align: center;
+      padding: 40px;
+      background: linear-gradient(to bottom, #87CEEB, #E0F7FA);
+      margin: 0;
+      min-height: 100vh;
+    }
+    h1 {
+      color: #1e3a8a;
+      margin-bottom: 10px;
+    }
+    .airport {
+      font-size: 20px;
+      color: #444;
+      margin-bottom: 30px;
+    }
+    .temp-container {
+      font-size: 72px;
+      font-weight: bold;
+      margin: 40px 0;
+      color: #1e40af;
+    }
+    .unit-toggle button {
+      padding: 12px 24px;
+      font-size: 20px;
+      margin: 0 10px;
+      border: none;
+      border-radius: 8px;
+      background: #3b82f6;
+      color: white;
+      cursor: pointer;
+    }
+    .unit-toggle button.active {
+      background: #10b981;
+      transform: scale(1.1);
+    }
+    #last-updated, #raw-metar {
+      margin-top: 30px;
+      color: #555;
+      font-size: 16px;
+    }
+    .error {
+      color: #dc2626;
+    }
+    footer {
+      margin-top: 60px;
+      color: #666;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Current Temperature</h1>
+  <div class="airport">Chicago Midway International Airport (KMDW)</div>
+  
+  <div class="temp-container" id="temperature">Loading...</div>
+
+  <div class="unit-toggle">
+    <button id="btn-c" class="active">°C</button>
+    <button id="btn-f">°F</button>
+  </div>
+
+  <div id="last-updated"></div>
+  <div id="raw-metar"></div>
+
+  <footer>Data from NOAA Aviation Weather Center</footer>
+
+  <script>
+    let currentTempC = null;
+    let currentUnit = 'C';
+
+    const tempDisplay = document.getElementById('temperature');
+    const lastUpdated = document.getElementById('last-updated');
+    const rawMetar = document.getElementById('raw-metar');
+    const btnC = document.getElementById('btn-c');
+    const btnF = document.getElementById('btn-f');
+
+    function updateDisplay() {
+      if (currentTempC === null) return;
+
+      let displayTemp;
+      if (currentUnit === 'C') {
+        displayTemp = `${currentTempC} °C`;
+        btnC.classList.add('active');
+        btnF.classList.remove('active');
+      } else {
+        const tempF = Math.round((currentTempC * 9/5) + 32);
+        displayTemp = `${tempF} °F`;
+        btnC.classList.remove('active');
+        btnF.classList.add('active');
+      }
+      tempDisplay.innerText = displayTemp;
+    }
+
+    async function fetchTemperature() {
+      try {
+        const response = await fetch('/api/temp');
+        const data = await response.json();
+
+        if (data.error) {
+          tempDisplay.innerText = 'Data unavailable';
+          tempDisplay.classList.add('error');
+          rawMetar.innerText = data.error;
+          return;
+        }
+
+        currentTempC = data.temperature;
+        tempDisplay.classList.remove('error');
+        updateDisplay();
+
+        lastUpdated.innerText = `Last updated: ${new Date().toLocaleString()}`;
+        rawMetar.innerText = `Raw METAR: ${data.rawMetar}`;
+      } catch (error) {
+        tempDisplay.innerText = 'Connection error';
+        tempDisplay.classList.add('error');
+      }
+    }
+
+    btnC.onclick = () => { currentUnit = 'C'; updateDisplay(); };
+    btnF.onclick = () => { currentUnit = 'F'; updateDisplay(); };
+
+    // Load on start
+    fetchTemperature();
+
+    // Auto-refresh every 5 minutes
+    setInterval(fetchTemperature, 300000);
+  </script>
+</body>
+</html>
