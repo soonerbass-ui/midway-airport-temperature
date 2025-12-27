@@ -64,8 +64,8 @@
   <div class="temp-container" id="temperature">Loading...</div>
 
   <div class="unit-toggle">
-    <button id="btn-c" class="active">°C</button>
-    <button id="btn-f">°F</button>
+    <button id="btn-c">°C</button>
+    <button id="btn-f" class="active">°F</button>
   </div>
 
   <div id="last-updated"></div>
@@ -75,7 +75,7 @@
 
   <script>
     let currentTempC = null;
-    let currentUnit = 'C';
+    let currentUnit = 'F';  // Changed to Fahrenheit as default
 
     const tempDisplay = document.getElementById('temperature');
     const lastUpdated = document.getElementById('last-updated');
