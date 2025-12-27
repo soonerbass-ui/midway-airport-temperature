@@ -25,24 +25,59 @@ app.get('/api/temps', async (req, res) => {
     const ids = airportList.map(a => a.code).join(',');
     const apiUrl = `https://aviationweather.gov/api/data/metar?ids=${ids}&format=raw`;
     
-    const response = await fetch(apiUrl, {
-      headers: { 'User-Agent': 'Midway-Temp-App/1.0' } // Helps avoid blocks
+    const response = await fetch(apiUrl);
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    
+    const text = await response.text();
+    const lines = text.trim().split('\n').filter(line => line.trim());
+    
+    const codeToAirport = {};
+    airportList.forEach(apt => codeToAirport[apt.code] = apt);
+
+    const resultsMap = {};
+
+    lines.forEach(line => {
+      // Extract ICAO code: first 4 letters after possible "SPECI " or "METAR "
+      const codeMatch = line.match(/(?:SPECI|METAR)\s*([A-Z]{4})\s/);
+      if (!codeMatch) return;
+
+      const code = codeMatch[1];
+      if (!codeToAirport[code]) return;
+
+      // Extract air temperature: (M?\d{2})\/(M?\d{2}) 
+      const tempMatch = line.match(/(M?\d{2})\/(M?\d{2})/);
+      let tempC = null;
+      if (tempMatch) {
+        const tempStr = tempMatch[1];
+        tempC = parseInt(tempStr.replace('M', '-'), 10);
+      }
+
+      resultsMap[code] = {
+        code,
+        name: codeToAirport[code].name,
+        tempC,
+        tempF: tempC !== null ? Math.round((tempC * 9/5) + 32) : null,
+        rawMetar: line.trim()
+      };
     });
 
-    if (!response.ok) {
-      throw new Error(`API returned ${response.status}`);
-    }
+    // Order by original list
+    const orderedResults = airportList.map(apt => {
+      return resultsMap[apt.code] || {
+        code: apt.code,
+        name: apt.name,
+        tempC: null,
+        tempF: null,
+        rawMetar: 'No METAR available'
+      };
+    });
 
-    const text = await response.text();
-    
-    // Debug: return the raw API response in JSON for testing
     res.json({ 
-      debug_raw_text: text, 
-      line_count: text.split('\n').length,
-      airports: [], // empty for now
+      airports: orderedResults,
       updated: new Date().toISOString()
     });
   } catch (error) {
+    console.error('Error:', error);
     res.status(500).json({ error: error.message });
   }
 });
