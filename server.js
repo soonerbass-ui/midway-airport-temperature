@@ -32,28 +32,27 @@ app.get('/api/temps', async (req, res) => {
     const text = await response.text();
     const lines = text.trim().split('\n').filter(line => line.trim());
     
-    // Create a map for quick lookup by code
+    // Map code to airport info
     const codeToAirport = {};
     airportList.forEach(apt => {
       codeToAirport[apt.code] = apt;
     });
 
-    // Parse each line
     const results = [];
-    const seenCodes = new Set(); // Avoid duplicates
+    const seenCodes = new Set();
 
     lines.forEach(line => {
-      // Match the ICAO code strictly at the start of the line (^)
+      // Match ICAO code at the very start
       const codeMatch = line.match(/^([A-Z]{4})\s/);
       if (!codeMatch) return;
 
       const code = codeMatch[1];
-      if (!codeToAirport[code] || seenCodes.has(code)) return; // Only process requested & unique
+      if (!codeToAirport[code] || seenCodes.has(code)) return;
 
       seenCodes.add(code);
 
-      // Extract temperature: \s(M?\d{2})\/
-      const tempMatch = line.match(/\s(M?\d{2})\/(M?\d{2})\s/);
+      // Extract temperature: look for \s(M?\d{2})\/  (first number before / in temp/dewpoint)
+      const tempMatch = line.match(/\s(M?\d{2})\/\s*(M?\d{2})/);
       let tempC = null;
       if (tempMatch) {
         tempC = parseInt(tempMatch[1].replace('M', '-'), 10);
@@ -68,7 +67,7 @@ app.get('/api/temps', async (req, res) => {
       });
     });
 
-    // Ensure all requested airports are included (even if missing from response)
+    // Fill in missing airports with N/A
     airportList.forEach(apt => {
       if (!seenCodes.has(apt.code)) {
         results.push({
@@ -81,7 +80,7 @@ app.get('/api/temps', async (req, res) => {
       }
     });
 
-    // Sort results to match original order
+    // Preserve original order
     const orderedResults = airportList.map(apt => 
       results.find(r => r.code === apt.code) || {
         code: apt.code,
