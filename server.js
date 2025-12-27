@@ -42,7 +42,7 @@ app.get('/api/temps', async (req, res) => {
     const seenCodes = new Set();
 
     lines.forEach(line => {
-      // Match ICAO code at the very start
+      // Match ICAO code at the very start of the line
       const codeMatch = line.match(/^([A-Z]{4})\s/);
       if (!codeMatch) return;
 
@@ -51,8 +51,8 @@ app.get('/api/temps', async (req, res) => {
 
       seenCodes.add(code);
 
-      // Extract temperature: look for \s(M?\d{2})\/  (first number before / in temp/dewpoint)
-      const tempMatch = line.match(/\s(M?\d{2})\/\s*(M?\d{2})/);
+      // Extract temperature: \s(M?\d{2})\/(M?\d{2})  — flexible on spaces around /
+      const tempMatch = line.match(/\s(M?\d{2})\/(M?\d{2})/);
       let tempC = null;
       if (tempMatch) {
         tempC = parseInt(tempMatch[1].replace('M', '-'), 10);
@@ -67,7 +67,7 @@ app.get('/api/temps', async (req, res) => {
       });
     });
 
-    // Fill in missing airports with N/A
+    // Add missing airports with N/A
     airportList.forEach(apt => {
       if (!seenCodes.has(apt.code)) {
         results.push({
