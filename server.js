@@ -7,7 +7,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.static('public'));
 
-// List of airports in your order
+// Ordered list of airports
 const airportList = [
   { code: 'KLAX', name: 'Los Angeles (LAX)' },
   { code: 'KORD', name: 'Chicago (ORD)' },
@@ -32,32 +32,68 @@ app.get('/api/temps', async (req, res) => {
     const text = await response.text();
     const lines = text.trim().split('\n').filter(line => line.trim());
     
-    // Each line is a raw METAR for one station
-    const results = lines.map(line => {
-      // Find the station code (first 4 letters after possible leading text)
-      const codeMatch = line.match(/([A-Z]{4})\s/);
-      const code = codeMatch ? codeMatch[1] : 'UNKNOWN';
-      
-      // Find temperature: \d{2}/ or M\d{2}/ (M = minus)
+    // Create a map for quick lookup by code
+    const codeToAirport = {};
+    airportList.forEach(apt => {
+      codeToAirport[apt.code] = apt;
+    });
+
+    // Parse each line
+    const results = [];
+    const seenCodes = new Set(); // Avoid duplicates
+
+    lines.forEach(line => {
+      // Match the ICAO code strictly at the start of the line (^)
+      const codeMatch = line.match(/^([A-Z]{4})\s/);
+      if (!codeMatch) return;
+
+      const code = codeMatch[1];
+      if (!codeToAirport[code] || seenCodes.has(code)) return; // Only process requested & unique
+
+      seenCodes.add(code);
+
+      // Extract temperature: \s(M?\d{2})\/
       const tempMatch = line.match(/\s(M?\d{2})\/(M?\d{2})\s/);
       let tempC = null;
       if (tempMatch) {
         tempC = parseInt(tempMatch[1].replace('M', '-'), 10);
       }
-      
-      const name = airportList.find(a => a.code === code)?.name || code;
-      
-      return {
+
+      results.push({
         code,
-        name,
+        name: codeToAirport[code].name,
         tempC,
         tempF: tempC !== null ? Math.round((tempC * 9/5) + 32) : null,
         rawMetar: line.trim()
-      };
+      });
     });
 
+    // Ensure all requested airports are included (even if missing from response)
+    airportList.forEach(apt => {
+      if (!seenCodes.has(apt.code)) {
+        results.push({
+          code: apt.code,
+          name: apt.name,
+          tempC: null,
+          tempF: null,
+          rawMetar: 'No METAR available'
+        });
+      }
+    });
+
+    // Sort results to match original order
+    const orderedResults = airportList.map(apt => 
+      results.find(r => r.code === apt.code) || {
+        code: apt.code,
+        name: apt.name,
+        tempC: null,
+        tempF: null,
+        rawMetar: 'No data'
+      }
+    );
+
     res.json({ 
-      airports: results,
+      airports: orderedResults,
       updated: new Date().toISOString()
     });
   } catch (error) {
