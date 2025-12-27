@@ -38,19 +38,18 @@ app.get('/api/temps', async (req, res) => {
     const resultsMap = {};
 
     lines.forEach(line => {
-      // Match ICAO code at start of line
+      // Match ICAO code at the very start of the line
       const codeMatch = line.match(/^([A-Z]{4})\s/);
       if (!codeMatch) return;
 
       const code = codeMatch[1];
       if (!codeToAirport[code]) return;
 
-      // Extract temperature: matches (M?\d{2})/(M?\d{2}) with optional spaces around
-      // This handles formats like 12/08, 09/M05, M02/M06
+      // Extract air temperature: matches dd/dd or Mdd/dd or Mdd/Mdd (first number before /)
       const tempMatch = line.match(/(M?\d{2})\/(M?\d{2})/);
       let tempC = null;
       if (tempMatch) {
-        const tempStr = tempMatch[1]; // First number is air temp
+        const tempStr = tempMatch[1]; // First group is air temp
         tempC = parseInt(tempStr.replace('M', '-'), 10);
       }
 
@@ -63,7 +62,7 @@ app.get('/api/temps', async (req, res) => {
       };
     });
 
-    // Build ordered results
+    // Build ordered results (preserves your requested order)
     const orderedResults = airportList.map(apt => {
       return resultsMap[apt.code] || {
         code: apt.code,
