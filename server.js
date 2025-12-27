@@ -22,54 +22,84 @@ const airportList = [
 
 app.get('/api/temps', async (req, res) => {
   try {
-    const results = [];
+    const ids = airportList.map(a => a.code).join(',');
+    const apiUrl = `https://aviationweather.gov/api/data/metar?ids=${ids}&hours=6&format=raw`;
+    
+    const response = await fetch(apiUrl);
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    
+    const text = await response.text();
+    const lines = text.trim().split('\n').filter(line => line.trim());
+    
+    const codeToAirport = {};
+    airportList.forEach(apt => codeToAirport[apt.code] = apt);
 
-    for (const apt of airportList) {
-      const stationId = apt.code; // ICAO codes work as station IDs
-      const url = `https://api.weather.gov/stations/${stationId}/observations/latest`;
+    const resultsMap = {};
 
-      try {
-        const response = await fetch(url, {
-          headers: { 'User-Agent': 'Midway-Temp-App/1.0 (your-email@example.com)' } // Required by NWS API
-        });
+    lines.forEach(line => {
+      const codeMatch = line.match(/(?:SPECI|METAR)\s*([A-Z]{4})\s/);
+      if (!codeMatch) return;
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
+      const code = codeMatch[1];
+      if (!codeToAirport[code]) return;
 
-        const data = await response.json();
-        const props = data.properties || {};
+      const tempMatch = line.match(/(M?\d{2})\/(M?\d{2})/);
+      let tempC = null;
+      if (tempMatch) {
+        tempC = parseInt(tempMatch[1].replace('M', '-'), 10);
+      }
 
-        const tempC = props.temperature ? props.temperature.value : null;
-        const tempF = tempC !== null ? Math.round((tempC * 9/5) + 32) : null;
+      if (!resultsMap[code]) resultsMap[code] = { reports: [] };
+      resultsMap[code].reports.push({ tempC, raw: line.trim() });
+    });
 
-        results.push({
-          code: apt.code,
-          name: apt.name,
-          tempC: tempC,
-          tempF: tempF,
-          trend: '—', // No history in this API (can add later if needed)
-          rawObservation: props // Full data for debugging
-        });
-      } catch (err) {
-        results.push({
+    const orderedResults = airportList.map(apt => {
+      const station = resultsMap[apt.code];
+      if (!station || station.reports.length === 0) {
+        return {
           code: apt.code,
           name: apt.name,
           tempC: null,
           tempF: null,
           trend: '—',
-          rawObservation: 'Error fetching data'
-        });
+          rawMetar: 'No METAR available'
+        };
       }
-    }
+
+      // Sort by timestamp (most recent first) - format is YYMMDDHHMMZ
+      station.reports.sort((a, b) => {
+        const timeA = a.raw.match(/\d{6}Z/);
+        const timeB = b.raw.match(/\d{6}Z/);
+        if (!timeA || !timeB) return 0;
+        return timeB[0].localeCompare(timeA[0]); // Reverse for most recent first
+      });
+
+      const latest = station.reports[0];
+      const previous = station.reports.length > 1 ? station.reports[1] : null;
+
+      let trend = '—';
+      if (previous && latest.tempC !== null && previous.tempC !== null) {
+        if (latest.tempC > previous.tempC) trend = '🔴';
+        else if (latest.tempC < previous.tempC) trend = '🔵';
+      }
+
+      return {
+        code: apt.code,
+        name: apt.name,
+        tempC: latest.tempC,
+        tempF: latest.tempC !== null ? Math.round((latest.tempC * 9/5) + 32) : null,
+        trend,
+        rawMetar: latest.raw
+      };
+    });
 
     res.json({ 
-      airports: results,
+      airports: orderedResults,
       updated: new Date().toISOString()
     });
   } catch (error) {
     console.error('Error:', error);
-    res.status(500).json({ error: 'Failed to fetch observation data' });
+    res.status(500).json({ error: 'Failed to fetch METAR data' });
   }
 });
 
