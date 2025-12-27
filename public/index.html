@@ -3,135 +3,173 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Midway Airport Temperature</title>
+  <title>US Airport Temperatures</title>
   <style>
     body {
-      font-family: 'Segoe UI', Arial, sans-serif;
-      text-align: center;
-      padding: 40px;
-      background: linear-gradient(to bottom, #87CEEB, #E0F7FA);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       margin: 0;
-      min-height: 100vh;
+      padding: 16px;
+      background: #f0f4f8;
+      color: #1a1a1a;
+      line-height: 1.5;
     }
     h1 {
-      color: #1e3a8a;
-      margin-bottom: 10px;
-    }
-    .airport {
-      font-size: 20px;
-      color: #444;
-      margin-bottom: 30px;
-    }
-    .temp-container {
-      font-size: 72px;
-      font-weight: bold;
-      margin: 40px 0;
+      font-size: 1.8rem;
+      text-align: center;
+      margin: 16px 0;
       color: #1e40af;
     }
-    .unit-toggle button {
-      padding: 12px 24px;
-      font-size: 20px;
-      margin: 0 10px;
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .toggle {
+      text-align: center;
+      margin: 16px 0;
+    }
+    .toggle button {
+      padding: 10px 20px;
+      font-size: 1.1rem;
+      margin: 0 8px;
       border: none;
-      border-radius: 8px;
+      border-radius: 6px;
+      cursor: pointer;
       background: #3b82f6;
       color: white;
-      cursor: pointer;
     }
-    .unit-toggle button.active {
+    .toggle button.active {
       background: #10b981;
-      transform: scale(1.1);
     }
-    #last-updated, #raw-metar {
-      margin-top: 30px;
+    .updated {
+      text-align: center;
+      font-size: 0.9rem;
       color: #555;
-      font-size: 16px;
+      margin-bottom: 20px;
+    }
+    .airport-list {
+      list-style: none;
+      padding: 0;
+    }
+    .airport-item {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 1.2rem;
+    }
+    .airport-name {
+      font-weight: 600;
+    }
+    .temp {
+      font-weight: bold;
+      min-width: 100px;
+      text-align: right;
     }
     .error {
       color: #dc2626;
+      text-align: center;
+      font-size: 1.1rem;
     }
-    footer {
-      margin-top: 60px;
-      color: #666;
-      font-size: 14px;
+    @media (max-width: 500px) {
+      .airport-item {
+        flex-direction: column;
+        text-align: center;
+      }
+      .temp {
+        margin-top: 8px;
+        font-size: 1.4rem;
+      }
     }
   </style>
 </head>
 <body>
-  <h1>Current Temperature</h1>
-  <div class="airport">Chicago Midway International Airport (KMDW)</div>
-  
-  <div class="temp-container" id="temperature">Loading...</div>
+  <div class="container">
+    <h1>Current Airport Temperatures</h1>
+    
+    <div class="toggle">
+      <button id="btn-c">°C</button>
+      <button id="btn-f" class="active">°F</button>
+    </div>
 
-  <div class="unit-toggle">
-    <button id="btn-c">°C</button>
-    <button id="btn-f" class="active">°F</button>
+    <div id="updated" class="updated">Loading...</div>
+
+    <ul id="airport-list" class="airport-list"></ul>
   </div>
 
-  <div id="last-updated"></div>
-  <div id="raw-metar"></div>
-
-  <footer>Data from NOAA Aviation Weather Center</footer>
-
   <script>
-    let currentTempC = null;
-    let currentUnit = 'F';  // Changed to Fahrenheit as default
+    let currentUnit = 'F';  // Default to Fahrenheit
+    let airportData = [];
 
-    const tempDisplay = document.getElementById('temperature');
-    const lastUpdated = document.getElementById('last-updated');
-    const rawMetar = document.getElementById('raw-metar');
+    const list = document.getElementById('airport-list');
+    const updatedEl = document.getElementById('updated');
     const btnC = document.getElementById('btn-c');
     const btnF = document.getElementById('btn-f');
 
     function updateDisplay() {
-      if (currentTempC === null) return;
-
-      let displayTemp;
-      if (currentUnit === 'C') {
-        displayTemp = `${currentTempC} °C`;
-        btnC.classList.add('active');
-        btnF.classList.remove('active');
-      } else {
-        const tempF = Math.round((currentTempC * 9/5) + 32);
-        displayTemp = `${tempF} °F`;
-        btnC.classList.remove('active');
-        btnF.classList.add('active');
-      }
-      tempDisplay.innerText = displayTemp;
+      list.innerHTML = '';
+      airportData.forEach(apt => {
+        const li = document.createElement('li');
+        li.className = 'airport-item';
+        const name = document.createElement('span');
+        name.className = 'airport-name';
+        name.textContent = apt.name;
+        
+        const tempSpan = document.createElement('span');
+        tempSpan.className = 'temp';
+        if (apt.tempC === null) {
+          tempSpan.textContent = 'N/A';
+        } else if (currentUnit === 'C') {
+          tempSpan.textContent = `${apt.tempC} °C`;
+        } else {
+          tempSpan.textContent = `${apt.tempF} °F`;
+        }
+        
+        li.appendChild(name);
+        li.appendChild(tempSpan);
+        list.appendChild(li);
+      });
     }
 
-    async function fetchTemperature() {
+    async function fetchTemperatures() {
       try {
-        const response = await fetch('/api/temp');
+        const response = await fetch('/api/temps');
         const data = await response.json();
 
-        if (data.error) {
-          tempDisplay.innerText = 'Data unavailable';
-          tempDisplay.classList.add('error');
-          rawMetar.innerText = data.error;
-          return;
-        }
+        if (data.error) throw new Error(data.error);
 
-        currentTempC = data.temperature;
-        tempDisplay.classList.remove('error');
+        airportData = data.airports;
+        updatedEl.textContent = `Last updated: ${new Date(data.updated).toLocaleString()}`;
         updateDisplay();
-
-        lastUpdated.innerText = `Last updated: ${new Date().toLocaleString()}`;
-        rawMetar.innerText = `Raw METAR: ${data.rawMetar}`;
       } catch (error) {
-        tempDisplay.innerText = 'Connection error';
-        tempDisplay.classList.add('error');
+        updatedEl.textContent = 'Error loading data';
+        updatedEl.classList.add('error');
+        console.error(error);
       }
     }
 
-    btnC.onclick = () => { currentUnit = 'C'; updateDisplay(); };
-    btnF.onclick = () => { currentUnit = 'F'; updateDisplay(); };
+    btnC.onclick = () => {
+      currentUnit = 'C';
+      btnC.classList.add('active');
+      btnF.classList.remove('active');
+      updateDisplay();
+    };
 
-    // Load on start
-    fetchTemperature();
+    btnF.onclick = () => {
+      currentUnit = 'F';
+      btnF.classList.add('active');
+      btnC.classList.remove('active');
+      updateDisplay();
+    };
 
-    // Auto-refresh every 5 minutes
-    setInterval(fetchTemperature, 300000);
+    // Initial fetch
+    fetchTemperatures();
+
+    // Refresh every 5 minutes
+    setInterval(fetchTemperatures, 300000);
   </script>
 </body>
 </html>
