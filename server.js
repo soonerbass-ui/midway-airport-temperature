@@ -32,64 +32,46 @@ app.get('/api/temps', async (req, res) => {
     const text = await response.text();
     const lines = text.trim().split('\n').filter(line => line.trim());
     
-    // Map code to airport info
     const codeToAirport = {};
-    airportList.forEach(apt => {
-      codeToAirport[apt.code] = apt;
-    });
+    airportList.forEach(apt => codeToAirport[apt.code] = apt);
 
-    const results = [];
-    const seenCodes = new Set();
+    const resultsMap = {};
 
     lines.forEach(line => {
-      // Match ICAO code at the very start of the line
+      // Match ICAO code at start of line
       const codeMatch = line.match(/^([A-Z]{4})\s/);
       if (!codeMatch) return;
 
       const code = codeMatch[1];
-      if (!codeToAirport[code] || seenCodes.has(code)) return;
+      if (!codeToAirport[code]) return;
 
-      seenCodes.add(code);
-
-      // Extract temperature: \s(M?\d{2})\/(M?\d{2})  — flexible on spaces around /
-      const tempMatch = line.match(/\s(M?\d{2})\/(M?\d{2})/);
+      // Extract temperature: looks for (M?\d{2})/(M?\d{2}) with optional spaces
+      const tempMatch = line.match(/(\s|^)(M?\d{2})\/(M?\d{2})(\s|$)/);
       let tempC = null;
       if (tempMatch) {
-        tempC = parseInt(tempMatch[1].replace('M', '-'), 10);
+        const tempStr = tempMatch[2];
+        tempC = parseInt(tempStr.replace('M', '-'), 10);
       }
 
-      results.push({
+      resultsMap[code] = {
         code,
         name: codeToAirport[code].name,
         tempC,
         tempF: tempC !== null ? Math.round((tempC * 9/5) + 32) : null,
         rawMetar: line.trim()
-      });
+      };
     });
 
-    // Add missing airports with N/A
-    airportList.forEach(apt => {
-      if (!seenCodes.has(apt.code)) {
-        results.push({
-          code: apt.code,
-          name: apt.name,
-          tempC: null,
-          tempF: null,
-          rawMetar: 'No METAR available'
-        });
-      }
-    });
-
-    // Preserve original order
-    const orderedResults = airportList.map(apt => 
-      results.find(r => r.code === apt.code) || {
+    // Build ordered results (preserves your list order)
+    const orderedResults = airportList.map(apt => {
+      return resultsMap[apt.code] || {
         code: apt.code,
         name: apt.name,
         tempC: null,
         tempF: null,
-        rawMetar: 'No data'
-      }
-    );
+        rawMetar: 'No METAR available'
+      };
+    });
 
     res.json({ 
       airports: orderedResults,
