@@ -3,84 +3,173 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>US Airport Temps</title>
+  <title>US Airport Temperatures</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 16px;
       background: #f0f4f8;
       color: #1a1a1a;
-      padding: 12px;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-    .container {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
+      line-height: 1.5;
     }
     h1 {
-      font-size: 1.3rem;
+      font-size: 1.8rem;
       text-align: center;
-      margin: 8px 0 12px;
+      margin: 16px 0;
       color: #1e40af;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
     }
     .toggle {
       text-align: center;
-      margin: 8px 0;
+      margin: 16px 0;
     }
     .toggle button {
-      padding: 6px 16px;
-      font-size: 0.95rem;
-      margin: 0 6px;
+      padding: 10px 20px;
+      font-size: 1.1rem;
+      margin: 0 8px;
       border: none;
       border-radius: 6px;
       cursor: pointer;
       background: #3b82f6;
       color: white;
-      font-weight: 600;
     }
     .toggle button.active {
       background: #10b981;
     }
     .updated {
       text-align: center;
-      font-size: 0.75rem;
+      font-size: 0.9rem;
       color: #555;
-      margin: 6px 0 12px;
+      margin-bottom: 20px;
     }
     .airport-list {
       list-style: none;
-      flex: 1;
+      padding: 0;
     }
     .airport-item {
       background: white;
-      border-radius: 8px;
-      padding: 8px 12px;
-      margin-bottom: 6px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 0.95rem;
+      font-size: 1.2rem;
     }
     .airport-name {
-      font-weight: 500;
-      color: #1e293b;
+      font-weight: 600;
     }
     .temp {
       font-weight: bold;
-      min-width: 70px;
+      min-width: 100px;
       text-align: right;
-      color: #1e40af;
     }
-    .temp.na { color: #dc2626; }
     .error {
       color: #dc2626;
       text-align: center;
-      font-size: 0.9rem;
-      padding: 12px;
+      font-size: 1.1rem;
     }
-    /* Extra compact on small screens */
-    @media (max-height: 812px) { /* iPhone 
+    @media (max-width: 500px) {
+      .airport-item {
+        flex-direction: column;
+        text-align: center;
+      }
+      .temp {
+        margin-top: 8px;
+        font-size: 1.4rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Current Airport Temperatures</h1>
+    
+    <div class="toggle">
+      <button id="btn-c">°C</button>
+      <button id="btn-f" class="active">°F</button>
+    </div>
+
+    <div id="updated" class="updated">Loading...</div>
+
+    <ul id="airport-list" class="airport-list"></ul>
+  </div>
+
+  <script>
+    let currentUnit = 'F';  // Default to Fahrenheit
+    let airportData = [];
+
+    const list = document.getElementById('airport-list');
+    const updatedEl = document.getElementById('updated');
+    const btnC = document.getElementById('btn-c');
+    const btnF = document.getElementById('btn-f');
+
+    function updateDisplay() {
+      list.innerHTML = '';
+      airportData.forEach(apt => {
+        const li = document.createElement('li');
+        li.className = 'airport-item';
+        const name = document.createElement('span');
+        name.className = 'airport-name';
+        name.textContent = apt.name;
+        
+        const tempSpan = document.createElement('span');
+        tempSpan.className = 'temp';
+        if (apt.tempC === null) {
+          tempSpan.textContent = 'N/A';
+        } else if (currentUnit === 'C') {
+          tempSpan.textContent = `${apt.tempC} °C`;
+        } else {
+          tempSpan.textContent = `${apt.tempF} °F`;
+        }
+        
+        li.appendChild(name);
+        li.appendChild(tempSpan);
+        list.appendChild(li);
+      });
+    }
+
+    async function fetchTemperatures() {
+      try {
+        const response = await fetch('/api/temps');
+        const data = await response.json();
+
+        if (data.error) throw new Error(data.error);
+
+        airportData = data.airports;
+        updatedEl.textContent = `Last updated: ${new Date(data.updated).toLocaleString()}`;
+        updateDisplay();
+      } catch (error) {
+        updatedEl.textContent = 'Error loading data';
+        updatedEl.classList.add('error');
+        console.error(error);
+      }
+    }
+
+    btnC.onclick = () => {
+      currentUnit = 'C';
+      btnC.classList.add('active');
+      btnF.classList.remove('active');
+      updateDisplay();
+    };
+
+    btnF.onclick = () => {
+      currentUnit = 'F';
+      btnF.classList.add('active');
+      btnC.classList.remove('active');
+      updateDisplay();
+    };
+
+    // Initial fetch
+    fetchTemperatures();
+
+    // Refresh every 5 minutes
+    setInterval(fetchTemperatures, 300000);
+  </script>
+</body>
+</html>
