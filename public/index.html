@@ -74,12 +74,9 @@
       <button id="btn-c">°C</button>
       <button id="btn-f" class="active">°F</button>
     </div>
-
     <div id="updated" class="updated">Loading...</div>
-
     <ul id="airport-list" class="airport-list"></ul>
   </div>
-
   <script>
     let currentUnit = 'F';
     let airportData = [];
@@ -87,40 +84,40 @@
     const updatedEl = document.getElementById('updated');
     const btnC = document.getElementById('btn-c');
     const btnF = document.getElementById('btn-f');
-
+    
     function updateDisplay() {
       list.innerHTML = '';
       airportData.forEach(apt => {
         const li = document.createElement('li');
         li.className = 'airport-item';
-
         const name = document.createElement('span');
         name.className = 'airport-name';
         name.textContent = apt.name;
-
         const tempGroup = document.createElement('div');
         tempGroup.className = 'temp-group';
-
         const trend = document.createElement('span');
         trend.className = 'trend';
         trend.textContent = apt.trend || '—';
-
         const tempSpan = document.createElement('span');
         tempSpan.className = 'temp' + (apt.tempC === null ? ' na' : '');
         tempSpan.textContent = apt.tempC === null ? 'N/A' : currentUnit === 'C' ? `${apt.tempC}°C` : `${apt.tempF}°F`;
-
         tempGroup.appendChild(trend);
         tempGroup.appendChild(tempSpan);
-
         li.appendChild(name);
         li.appendChild(tempGroup);
         list.appendChild(li);
       });
     }
-
+    
     async function fetchTemperatures() {
       try {
-        const response = await fetch('/api/temps');
+        // Add cache-busting timestamp to force fresh data
+        const response = await fetch(`/api/temps?_t=${Date.now()}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache'
+          }
+        });
         const data = await response.json();
         if (data.error) throw new Error(data.error);
         
@@ -132,22 +129,26 @@
         console.error(error);
       }
     }
-
+    
     btnC.onclick = () => {
       currentUnit = 'C';
       btnC.classList.add('active');
       btnF.classList.remove('active');
       updateDisplay();
     };
+    
     btnF.onclick = () => {
       currentUnit = 'F';
       btnF.classList.add('active');
       btnC.classList.remove('active');
       updateDisplay();
     };
-
+    
+    // Fetch immediately on load
     fetchTemperatures();
-    setInterval(fetchTemperatures, 300000);
+    
+    // Refresh every 2 minutes (120000ms) instead of 5 minutes
+    setInterval(fetchTemperatures, 120000);
   </script>
 </body>
 </html>
