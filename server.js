@@ -1,7 +1,6 @@
 const express = require('express');
 const fetch = require('node-fetch');
 const path = require('path');
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -33,26 +32,24 @@ app.get('/api/temps', async (req, res) => {
     
     const codeToAirport = {};
     airportList.forEach(apt => codeToAirport[apt.code] = apt);
-
+    
     const resultsMap = {};
-
     lines.forEach(line => {
       const codeMatch = line.match(/(?:SPECI|METAR)\s*([A-Z]{4})\s/);
       if (!codeMatch) return;
-
       const code = codeMatch[1];
       if (!codeToAirport[code]) return;
-
+      
       const tempMatch = line.match(/(M?\d{2})\/(M?\d{2})/);
       let tempC = null;
       if (tempMatch) {
         tempC = parseInt(tempMatch[1].replace('M', '-'), 10);
       }
-
+      
       if (!resultsMap[code]) resultsMap[code] = { reports: [] };
       resultsMap[code].reports.push({ tempC, raw: line.trim() });
     });
-
+    
     const orderedResults = airportList.map(apt => {
       const station = resultsMap[apt.code];
       if (!station || station.reports.length === 0) {
@@ -65,7 +62,7 @@ app.get('/api/temps', async (req, res) => {
           rawMetar: 'No METAR available'
         };
       }
-
+      
       // Sort by timestamp (most recent first) - format is YYMMDDHHMMZ
       station.reports.sort((a, b) => {
         const timeA = a.raw.match(/\d{6}Z/);
@@ -73,16 +70,16 @@ app.get('/api/temps', async (req, res) => {
         if (!timeA || !timeB) return 0;
         return timeB[0].localeCompare(timeA[0]); // Reverse for most recent first
       });
-
+      
       const latest = station.reports[0];
       const previous = station.reports.length > 1 ? station.reports[1] : null;
-
+      
       let trend = '—';
       if (previous && latest.tempC !== null && previous.tempC !== null) {
         if (latest.tempC > previous.tempC) trend = '🔴';
         else if (latest.tempC < previous.tempC) trend = '🔵';
       }
-
+      
       return {
         code: apt.code,
         name: apt.name,
@@ -92,7 +89,7 @@ app.get('/api/temps', async (req, res) => {
         rawMetar: latest.raw
       };
     });
-
+    
     res.json({ 
       airports: orderedResults,
       updated: new Date().toISOString()
