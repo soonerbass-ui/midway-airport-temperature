@@ -33,11 +33,26 @@
       cursor: pointer;
     }
     .toggle button.active { background: #10b981; }
-    .updated {
+    .status-bar {
       text-align: center;
+      margin: 4px 0 8px;
+    }
+    .updated {
       font-size: 0.75rem;
       color: #666;
+    }
+    .fetching {
+      font-size: 0.7rem;
+      color: #10b981;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+    .info-note {
+      font-size: 0.7rem;
+      color: #888;
+      text-align: center;
       margin: 4px 0 8px;
+      font-style: italic;
     }
     .airport-list { list-style: none; }
     .airport-item {
@@ -64,6 +79,13 @@
     }
     .trend { font-size: 1.1rem; }
     .temp.na { color: #dc2626; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .fetching {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
   </style>
 </head>
 <body>
@@ -74,7 +96,16 @@
       <button id="btn-c">°C</button>
       <button id="btn-f" class="active">°F</button>
     </div>
-    <div id="updated" class="updated">Loading...</div>
+    
+    <div class="status-bar">
+      <div id="updated" class="updated">Loading...</div>
+      <div id="fetching" class="fetching" style="display: none;">Checking for updates...</div>
+    </div>
+    
+    <div class="info-note">
+      METAR reports update hourly (~50min past each hour)
+    </div>
+    
     <ul id="airport-list" class="airport-list"></ul>
   </div>
   <script>
@@ -82,6 +113,7 @@
     let airportData = [];
     const list = document.getElementById('airport-list');
     const updatedEl = document.getElementById('updated');
+    const fetchingEl = document.getElementById('fetching');
     const btnC = document.getElementById('btn-c');
     const btnF = document.getElementById('btn-f');
     
@@ -110,6 +142,9 @@
     }
     
     async function fetchTemperatures() {
+      // Show fetching indicator
+      fetchingEl.style.display = 'block';
+      
       try {
         // Add cache-busting timestamp to force fresh data
         const response = await fetch(`/api/temps?_t=${Date.now()}`, {
@@ -122,11 +157,28 @@
         if (data.error) throw new Error(data.error);
         
         airportData = data.airports;
-        updatedEl.textContent = `Updated: ${new Date(data.updated).toLocaleString()}`;
+        
+        const updateTime = new Date(data.updated);
+        const now = new Date();
+        const minutesAgo = Math.round((now - updateTime) / 1000 / 60);
+        
+        let timeString = updateTime.toLocaleTimeString();
+        if (minutesAgo < 1) {
+          timeString += ' (just now)';
+        } else if (minutesAgo < 60) {
+          timeString += ` (${minutesAgo}m ago)`;
+        }
+        
+        updatedEl.textContent = `Last checked: ${timeString}`;
         updateDisplay();
       } catch (error) {
         updatedEl.textContent = 'Error loading data';
         console.error(error);
+      } finally {
+        // Hide fetching indicator after a brief delay
+        setTimeout(() => {
+          fetchingEl.style.display = 'none';
+        }, 800);
       }
     }
     
@@ -147,7 +199,7 @@
     // Fetch immediately on load
     fetchTemperatures();
     
-    // Refresh every 2 minutes (120000ms) instead of 5 minutes
+    // Refresh every 2 minutes (120000ms)
     setInterval(fetchTemperatures, 120000);
   </script>
 </body>
